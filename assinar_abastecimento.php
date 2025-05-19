@@ -10,6 +10,30 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'user') {
     exit();
 }
 
+$secretarias_map = [
+    "Gabinete do Prefeito" => "GABINETE DO PREFEITO",
+    "Gabinete do Vice-Prefeito" => "GABINETE DO VICE-PREFEITO",
+    "Secretaria Municipal da Mulher de Família" => "SECRETARIA DA MULHER",
+    "Secretaria Municipal de Fazenda" => "SECRETARIA DE FAZENDA",
+    "Secretaria Municipal de Educação" => "SECRETARIA DE EDUCAÇÃO",
+    "Secretaria Municipal de Agricultura e Meio Ambiente" => "SECRETARIA DE AGRICULTURA E MEIO AMBIENTE",
+    "Secretaria Municipal de Agricultura Familiar e Segurança Alimentar" => "SECRETARIA DE AGRICULTURA FAMILIAR",
+    "Secretaria Municipal de Assistência Social" => "SECRETARIA DE ASSISTÊNCIA SOCIAL",
+    "Secretaria Municipal de Desenvolvimento Econômico e Turismo" => "SECRETARIA DE DESENV. ECONÔMICO",
+    "Secretaria Municipal de Administração" => "SECRETARIA DE ADMINISTRAÇÃO",
+    "Secretaria Municipal de Governo" => "SECRETARIA DE GOVERNO",
+    "Secretaria Municipal de Infraestrutura, Transportes e Saneamento" => "SECRETARIA DE INFRAESTRUTURA, TRANSPORTE E SANEAMENTO",
+    "Secretaria Municipal de Esporte e Lazer e Juventude" => "SECRETARIA DE ESPORTE E LAZER",
+    "Secretaria Municipal da Cidade" => "SECRETARIA DA CIDADE",
+    "Secretaria Municipal de Saúde" => "SECRETARIA DE SAÚDE",
+    "Secretaria Municipal de Segurança Pública, Trânsito e Defesa Civil" => "SECRETARIA DE SEGURANÇA PÚBLICA",
+    "Controladoria Geral do Município" => "CONTROLADORIA GERAL",
+    "Procuradoria Geral do Município" => "PROCURADORIA GERAL",
+    "Secretaria Municipal de Cultura" => "SECRETARIA DE CULTURA",
+    "Secretaria Municipal de Planejamento, Ciência, Tecnologia e Inovação" => "SECRETARIA DE PLANEJAMENTO E TECNOLOGIA",
+    "Secretaria Municipal de Obras e Serviços Públicos" => "SECRETARIA DE OBRAS E SERVIÇOS PÚBLICOS",
+];
+
 $abastecimento_id = $_GET['id'] ?? 0;
 
 try {
@@ -80,6 +104,20 @@ try {
             $secretaria = $abastecimento['secretaria'];
             $valor = $abastecimento['valor'];
             $combustivel = $abastecimento['combustivel'];
+            $posto_name = $abastecimento['posto_name'];
+
+            // Mapear a secretaria conforme o mapa fornecido
+            $secretaria_normalizada = strtoupper(trim($secretaria));
+            foreach ($secretarias_map as $key => $value) {
+                if (strtoupper(trim($value)) === $secretaria_normalizada) {
+                    $secretaria_bd = $value;
+                    break;
+                }
+            }
+
+            if (!isset($secretaria_bd)) {
+                $secretaria_bd = $secretaria_normalizada;
+            }
 
             // Converter para o formato do banco de dados
             $coluna_combustivel = '';
@@ -88,7 +126,6 @@ try {
                 case 'Gasolina': $coluna_combustivel = 'valor_gasolina'; break;
                 case 'Diesel': $coluna_combustivel = 'valor_diesel'; break;
                 case 'Diesel S10': $coluna_combustivel = 'valor_diesel_s10'; break;
-                case 'Diesel S500': $coluna_combustivel = 'valor_diesel_s500'; break;
             }
 
             if (!empty($coluna_combustivel)) {
@@ -100,24 +137,32 @@ try {
                                           SET $coluna_combustivel = $coluna_combustivel - :valor,
                                               valor_total = valor_total - :valor
                                           WHERE secretaria = :secretaria
+                                          AND fornecedor = :fornecedor
+                                          AND status = 'ativo'
                                           AND ($coluna_combustivel - :valor) >= 0");
                     $stmt->bindParam(':valor', $valor);
-                    $stmt->bindParam(':secretaria', $secretaria);
+                    $stmt->bindParam(':secretaria', $secretaria_bd);
+                    $stmt->bindParam(':fornecedor', $posto_name);
                     $stmt->execute();
 
                     // Verificar se alguma linha foi afetada
                     if ($stmt->rowCount() == 0) {
-                        throw new Exception("Saldo insuficiente para o combustível na secretaria ou secretaria não encontrada");
+                        throw new Exception("Saldo insuficiente para o combustível na secretaria ou secretaria/fornecedor não encontrado");
                     }
 
                     // 2. Obter o id_empenho_total relacionado a esta secretária
-                    $stmt = $conn->prepare("SELECT id_empenho_total FROM empenhos_secretarias WHERE secretaria = :secretaria LIMIT 1");
-                    $stmt->bindParam(':secretaria', $secretaria);
+                    $stmt = $conn->prepare("SELECT id_empenho_total FROM empenhos_secretarias
+                                          WHERE secretaria = :secretaria
+                                          AND fornecedor = :fornecedor
+                                          AND status = 'ativo'
+                                          LIMIT 1");
+                    $stmt->bindParam(':secretaria', $secretaria_bd);
+                    $stmt->bindParam(':fornecedor', $posto_name);
                     $stmt->execute();
                     $id_empenho_total = $stmt->fetchColumn();
 
                     if (!$id_empenho_total) {
-                        throw new Exception("Empenho total não encontrado para esta secretaria");
+                        throw new Exception("Empenho total não encontrado para esta secretaria e fornecedor");
                     }
 
                     // 3. Descontar APENAS do valor_total no empenho total geral
@@ -154,6 +199,14 @@ try {
 } catch (PDOException $e) {
     die("Erro: " . $e->getMessage());
 }
+// Buscar o valor do prefixo na tabela 'veiculos'
+$stmt_veiculo = $conn->prepare("SELECT veiculo as prefixo FROM veiculos WHERE id = :veiculo_id");
+$stmt_veiculo->bindParam(':veiculo_id', $abastecimento['veiculo_id']);
+$stmt_veiculo->execute();
+$veiculo_data = $stmt_veiculo->fetch(PDO::FETCH_ASSOC);
+
+// Definir $prefixo com o resultado da consulta, ou um valor padrão para evitar erros
+$prefixo = $veiculo_data['prefixo'] ?? 'Não definido';
 ?>
 
 <!DOCTYPE html>
@@ -327,6 +380,7 @@ try {
 
                 <div class="abastecimento-info">
                     <p><strong>Posto:</strong> <?= $abastecimento['posto_name'] ?></p>
+                    <p><strong>Prefixo:</strong> <?= htmlspecialchars($prefixo) ?></p>
                     <p><strong>Veículo:</strong> <?= $abastecimento['veiculo_nome'] ?> - <?= $abastecimento['placa'] ?></p>
                     <p><strong>KM:</strong> <?= $abastecimento['km_abastecido'] ?></p>
                     <p><strong>Litros:</strong> <?= $abastecimento['litros'] ?></p>

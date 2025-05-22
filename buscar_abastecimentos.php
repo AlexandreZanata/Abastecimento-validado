@@ -1,34 +1,29 @@
 <?php
-session_start();
 include '../conexao.php';
+session_start();
 
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'geraladm') {
-    header('HTTP/1.1 403 Forbidden');
+if (!isset($_SESSION['user_id'])) {
+    http_response_code(401); // Não autorizado
+    echo json_encode(['error' => 'Usuário não autenticado']);
     exit();
 }
 
-$secretaria = $_GET['secretaria'] ?? '';
+$user_id = $_SESSION['user_id'];
 
 try {
-    $stmt = $conn->prepare("
-        SELECT 
-            r.*,
-            v.nome as veiculo_nome,
-            u.nome as motorista_name
-        FROM registro_abastecimento r
-        LEFT JOIN veiculos v ON r.prefixo = v.prefixo OR r.placa = v.placa
-        LEFT JOIN usuarios u ON r.nome = u.nome
-        WHERE r.secretaria = :secretaria
-        ORDER BY r.data DESC, r.hora DESC
-        LIMIT 10
-    ");
-    $stmt->bindParam(':secretaria', $secretaria);
+    $stmt = $conn->prepare("SELECT ap.id, ap.km_abastecido, ap.status, u.name as posto_name, ap.litros, ap.combustivel, ap.valor
+                            FROM abastecimentos_pendentes ap
+                            JOIN usuarios u ON ap.posto_id = u.id
+                            WHERE ap.motorista_id = :user_id
+                            AND ap.status IN ('aguardando_posto', 'aguardando_assinatura')
+                            ORDER BY ap.data_criacao DESC");
+    $stmt->bindParam(':user_id', $user_id);
     $stmt->execute();
-    
-    header('Content-Type: application/json');
-    echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));
+    $abastecimentos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    echo json_encode($abastecimentos);
 } catch (PDOException $e) {
-    header('HTTP/1.1 500 Internal Server Error');
-    echo json_encode(['error' => $e->getMessage()]);
+    http_response_code(500);
+    echo json_encode(['error' => 'Erro ao buscar abastecimentos pendentes: ' . $e->getMessage()]);
 }
 ?>

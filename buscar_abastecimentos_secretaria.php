@@ -1,35 +1,31 @@
 <?php
 session_start();
-include '../conexao.php';
+require_once 'conexao.php';
 
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'geraladm') {
-    header('HTTP/1.1 403 Forbidden');
-    exit();
+if (!isset($_GET['secretaria'])) {
+    die("Secretaria não especificada");
 }
 
-$secretaria = $_GET['secretaria'] ?? '';
+$secretaria = $_GET['secretaria'];
 
 try {
     $stmt = $conn->prepare("
-        SELECT 
-            data,
-            hora,
+        SELECT
+            data_abastecimento as data,
             veiculo,
             placa,
             combustivel,
             valor
-        FROM registro_abastecimento
+        FROM abastecimentos
         WHERE secretaria = :secretaria
-        ORDER BY data DESC, hora DESC
-        LIMIT 5
+        ORDER BY data_abastecimento DESC
+        LIMIT 10
     ");
     $stmt->bindParam(':secretaria', $secretaria);
     $stmt->execute();
-    
-    header('Content-Type: application/json');
-    echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));
+
+    $resultados = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    echo json_encode($resultados);
 } catch (PDOException $e) {
-    header('HTTP/1.1 500 Internal Server Error');
-    echo json_encode(['error' => $e->getMessage()]);
+    die("Erro ao buscar abastecimentos: " . $e->getMessage());
 }
-?>

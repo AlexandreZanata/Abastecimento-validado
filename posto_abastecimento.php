@@ -7,7 +7,6 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-// Verifica se o usuário é um posto
 if ($_SESSION['role'] != 'posto') {
     header("Location: ../unauthorized.php");
     exit();
@@ -20,8 +19,17 @@ try {
     $precos_combustiveis = $conn->query("SELECT posto_nome, tipo_combustivel, preco FROM postos_precos")->fetchAll(PDO::FETCH_ASSOC);
     $precos_json = json_encode($precos_combustiveis);
 
-    // Buscar saldos das secretarias
-    $secretarias_saldos = $conn->query("SELECT secretaria, valor_etanol, valor_gasolina, valor_diesel, valor_diesel_s10 FROM empenhos_secretarias")->fetchAll(PDO::FETCH_ASSOC);
+    // Buscar saldos das secretarias - MODIFICADO
+    $secretarias_saldos = $conn->query("
+        SELECT
+            secretaria,
+            valor_etanol,
+            valor_gasolina,
+            valor_diesel,
+            valor_diesel_s10,
+            status
+        FROM empenhos_secretarias
+    ")->fetchAll(PDO::FETCH_ASSOC);
     $saldos_json = json_encode($secretarias_saldos);
 
     // Inicializar variáveis de saldo com zero
@@ -64,33 +72,57 @@ try {
             if ($litros > $tanque) {
                 $error = "A quantidade de litros não pode exceder a capacidade do tanque ($tanque litros).";
             } else {
-                // Verificar saldo da secretaria
+                // Verificar status do empenho e saldo da secretaria
                 $secretaria = $conn->query("SELECT secretaria FROM usuarios WHERE id = (SELECT motorista_id FROM abastecimentos_pendentes WHERE id = $abastecimento_id)")->fetchColumn();
-                $saldo = $conn->query("SELECT valor_$combustivel FROM empenhos_secretarias WHERE secretaria = '$secretaria'")->fetchColumn();
+                $status_empenho = $conn->query("SELECT status FROM empenhos_secretarias WHERE secretaria = '$secretaria'")->fetchColumn();
 
-                if ($valor > $saldo) {
-                    $error = "A secretaria não possui saldo suficiente para este abastecimento (Saldo disponível: R$ " . number_format($saldo, 2, ',', '.') . ")";
+                if ($status_empenho != 'ativo') {
+                    $error = "O empenho desta secretaria está inativo. Não é possível realizar abastecimentos.";
                 } else {
-                    // Atualizar abastecimento
-                    $stmt = $conn->prepare("UPDATE abastecimentos_pendentes
-                                           SET litros = :litros,
-                                               combustivel = :combustivel,
-                                               valor = :valor,
-                                               status = 'aguardando_assinatura',
-                                               data_preenchimento = NOW()
-                                           WHERE id = :id");
-                    $stmt->bindParam(':litros', $litros);
-                    $stmt->bindParam(':combustivel', $combustivel);
-                    $stmt->bindParam(':valor', $valor);
-                    $stmt->bindParam(':id', $abastecimento_id);
+                    // Mapeia os possíveis valores de combustível para os nomes de colunas corretos no banco de dados
+                $mapa_combustiveis = [
+                    'Gasolina' => 'valor_gasolina',
+                    'Etanol' => 'valor_etanol',
+                    'Diesel' => 'valor_diesel',
+                    'Diesel S10' => 'valor_diesel_s10',
+                    'Diesel-S10' => 'valor_diesel_s10', // Inclui o caso com o hífen
+                ];
 
-                    if ($stmt->execute()) {
-                        $success = "Abastecimento registrado com sucesso! Aguardando assinatura do motorista.";
-                        // Recarregar os dados após atualização
-                        header("Location: posto_abastecimento.php");
-                        exit();
+                // Verifica se o combustível fornecido está no mapa
+                if (array_key_exists($combustivel, $mapa_combustiveis)) {
+                    $coluna_combustivel = $mapa_combustiveis[$combustivel];
+
+                    // Consulta o saldo com o nome da coluna mapeada
+                    $saldo = $conn->query("SELECT $coluna_combustivel FROM empenhos_secretarias WHERE secretaria = '$secretaria'")->fetchColumn();
+                } else {
+                    // Retorna erro se o combustível for inválido
+                    die("Erro: Tipo de combustível inválido.");
+                }
+
+                    if ($valor > $saldo) {
+                        $error = "A secretaria não possui saldo suficiente para este abastecimento (Saldo disponível: R$ " . number_format($saldo, 2, ',', '.') . ")";
                     } else {
-                        $error = "Erro ao registrar abastecimento.";
+                        // Atualizar abastecimento
+                        $stmt = $conn->prepare("UPDATE abastecimentos_pendentes
+                                               SET litros = :litros,
+                                                   combustivel = :combustivel,
+                                                   valor = :valor,
+                                                   status = 'aguardando_assinatura',
+                                                   data_preenchimento = NOW()
+                                               WHERE id = :id");
+                        $stmt->bindParam(':litros', $litros);
+                        $stmt->bindParam(':combustivel', $combustivel);
+                        $stmt->bindParam(':valor', $valor);
+                        $stmt->bindParam(':id', $abastecimento_id);
+
+                        if ($stmt->execute()) {
+                            $success = "Abastecimento registrado com sucesso! Aguardando assinatura do motorista.";
+                            // Recarregar os dados após atualização
+                            header("Location: posto_abastecimento.php");
+                            exit();
+                        } else {
+                            $error = "Erro ao registrar abastecimento.";
+                        }
                     }
                 }
             }
@@ -292,16 +324,17 @@ try {
         }
 
         .btn-excluir {
-            position: absolute;
+            position: absolute; /* Mantém o posicionamento absoluto */
             top: 1rem;
             right: 1rem;
             color: #9CA3AF;
             transition: all 0.2s ease;
-            z-index: 50;
+            z-index: 10; /* Ajuste o índice Z para evitar conflitos */
             background-color: white;
             padding: 0.5rem;
             border-radius: 50%;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            display: none; /* Esconde o botão até a interação */
         }
 
         .btn-excluir:hover {
@@ -309,7 +342,10 @@ try {
             transform: scale(1.1);
         }
 
-        /* Adicione estas regras ao seu CSS existente */
+        .abastecimento-item:hover .btn-excluir {
+            display: block; /* Mostra o botão apenas ao passar o mouse no contêiner */
+        }
+
         .info-container {
             word-break: break-word;
             overflow-wrap: break-word;
@@ -317,25 +353,27 @@ try {
 
         .motorista-photo-container {
             display: flex;
-            flex-direction: column;
-            align-items: center;
-            margin-bottom: 1rem;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .motorista-photo {
+            width: 300px;
+            height: 300px;
+            border-radius: 8px;
+            object-fit: cover;
+            border: 3px solid #e5e7eb;
         }
 
         .motorista-photo-label {
             text-align: center;
-            margin-bottom: 0.5rem;
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: #6b7280;
-        }
-
-        .motorista-photo {
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 3px solid #e5e7eb;
+            margin-bottom: 1rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #4b5563;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
         .abastecimento-item {
@@ -348,14 +386,131 @@ try {
         }
     </style>
 
-    <!-- Adicionar este script após o tailwind.config -->
     <script>
-        // Preços dos combustíveis
-        const precosCombustiveis = <?php echo $precos_json; ?>;
-        // Saldos das secretarias
-        const saldosSecretarias = <?php echo $saldos_json; ?>;
-
+        // Variáveis globais para preços e saldos
+        let precosCombustiveis = <?php echo $precos_json; ?>;
+        let saldosSecretarias = <?php echo $saldos_json; ?>;
         let savedInputs = {};
+
+        // Função para reativar eventos após atualização via AJAX
+        function reativarEventos() {
+            // Reativar eventos para os campos de litros
+            document.querySelectorAll('.litros-input').forEach(input => {
+                input.addEventListener('input', function() {
+                    formatarLitros(this);
+                });
+            });
+
+            // Reativar botão de atualização
+            const atualizarManualmente = document.getElementById('atualizar-manualmente');
+            if (atualizarManualmente) {
+                // Remover todos os event listeners antigos primeiro
+                const novoBtn = atualizarManualmente.cloneNode(true);
+                atualizarManualmente.parentNode.replaceChild(novoBtn, atualizarManualmente);
+
+                // Adicionar novo event listener
+                novoBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    console.log('Botão de atualização clicado');
+
+                    // Mostrar indicador de carregamento
+                    const atualizarIndicador = document.querySelector('.atualizar-indicador') ||
+                                               document.createElement('div');
+                    atualizarIndicador.className = 'fixed bottom-4 right-4 bg-primary text-white px-3 py-2 rounded-full shadow-lg z-50 atualizar-indicador';
+                    atualizarIndicador.innerHTML = '<i class="fas fa-sync-alt fa-spin mr-2"></i> Atualizando...';
+
+                    if (!document.querySelector('.atualizar-indicador')) {
+                        document.body.appendChild(atualizarIndicador);
+                    } else {
+                        atualizarIndicador.classList.remove('hidden');
+                    }
+
+                    // Executar a função de atualização
+                    atualizarSecoes();
+
+                    // Esconder o indicador após um tempo
+                    setTimeout(() => {
+                        atualizarIndicador.classList.add('hidden');
+                    }, 1000);
+                });
+            }
+
+            // Reativar saldos das secretarias
+            document.querySelectorAll('.abastecimento-item').forEach(item => {
+                const secretariaElement = item.querySelector('.secretaria-value');
+                if (secretariaElement) {
+                    const secretaria = secretariaElement.value;
+                    const container = item.querySelector('.saldos-secretaria-container');
+                    if (secretaria && container) {
+                        inicializarSaldosSecretaria(secretaria, container);
+                    }
+                }
+            });
+        }
+
+        // Função para atualizar as seções via AJAX
+        function atualizarSecoes() {
+            // Atualizar abastecimentos pendentes
+            fetch('atualizar_abastecimentos.php?tipo=pendentes')
+                .then(response => response.text())
+                .then(html => {
+                    document.querySelector('.abastecimentos-pendentes-container').innerHTML = html;
+                    // Reativar todos os eventos após atualização
+                    reativarEventos();
+                })
+                .catch(error => {
+                    console.error('Erro ao atualizar abastecimentos pendentes:', error);
+                });
+
+            // Atualizar abastecimentos aguardando assinatura
+            fetch('atualizar_abastecimentos.php?tipo=aguardando_assinatura')
+                .then(response => response.text())
+                .then(html => {
+                    document.querySelector('.abastecimentos-preenchidos-container').innerHTML = html;
+                    // Reativar todos os eventos após atualização
+                    reativarEventos();
+                })
+                .catch(error => {
+                    console.error('Erro ao atualizar abastecimentos aguardando assinatura:', error);
+                });
+
+            // Atualizar abastecimentos concluídos (se estiver visível)
+            const filtroTipo = document.querySelector('select[name="filtro_tipo"]')?.value;
+            if (filtroTipo) {
+                let url = 'filtrar_abastecimentos.php?tipo=' + filtroTipo;
+
+                if (filtroTipo === 'personalizado') {
+                    const dataInicial = document.querySelector('input[name="data_inicial"]')?.value;
+                    const dataFinal = document.querySelector('input[name="data_final"]')?.value;
+
+                    if (dataInicial && dataFinal) {
+                        url += '&data_inicial=' + dataInicial + '&data_final=' + dataFinal;
+
+                        fetch(url)
+                            .then(response => response.text())
+                            .then(html => {
+                                document.getElementById('abastecimentos-concluidos-container').innerHTML = html;
+                                // Reativar todos os eventos após atualização
+                                reativarEventos();
+                            })
+                            .catch(error => {
+                                console.error('Erro ao atualizar abastecimentos concluídos:', error);
+                            });
+                    }
+                } else {
+                    fetch(url)
+                        .then(response => response.text())
+                        .then(html => {
+                            document.getElementById('abastecimentos-concluidos-container').innerHTML = html;
+                            // Reativar todos os eventos após atualização
+                            reativarEventos();
+                        })
+                        .catch(error => {
+                            console.error('Erro ao atualizar abastecimentos concluídos:', error);
+                        });
+                }
+            }
+        }
 
         function verificarSaldoSecretaria(secretaria, combustivel, valor) {
             const secretariaData = saldosSecretarias.find(s => s.secretaria === secretaria);
@@ -387,8 +542,15 @@ try {
             const row = input.closest('.abastecimento-item');
             const litrosInput = row.querySelector('.litros-input');
             const valorInput = row.querySelector('.valor-input');
-            const secretaria = row.querySelector('.secretaria-value').value;
-            const combustivel = row.querySelector('input[name="combustivel"]').value;
+            const secretariaElement = row.querySelector('.secretaria-value');
+            const secretaria = secretariaElement ? secretariaElement.value : '';
+            let combustivel = row.querySelector('input[name="combustivel"]').value;
+
+            // Corrigir o nome do combustível para coincidir com o banco de dados
+            if (combustivel === 'Diesel-S10') {
+                combustivel = 'Diesel S10';
+            }
+
             const container = row.querySelector('.saldos-secretaria-container');
 
             const litros = parseFloat(litrosInput.value.replace(',', '.')) || 0;
@@ -417,6 +579,18 @@ try {
             // Encontrar os dados da secretaria específica
             const secretariaData = saldosSecretarias.find(s => s.secretaria === secretaria);
             if (!secretariaData) return;
+
+            // Verificar se o empenho está ativo
+            if (secretariaData.status !== 'ativo') {
+                container.innerHTML = `
+                    <div class="col-span-4 bg-red-50 rounded-lg p-4 text-center border border-red-200">
+                        <i class="fas fa-exclamation-triangle text-red-500 text-xl mb-2"></i>
+                        <p class="font-medium text-red-600">Empenho Inativo</p>
+                        <p class="text-sm text-gray-600 mt-1">Não é possível realizar abastecimentos</p>
+                    </div>
+                `;
+                return;
+            }
 
             // Atualizar todos os saldos, não apenas o do combustível selecionado
             const saldos = {
@@ -447,6 +621,18 @@ try {
 
             const secretariaData = saldosSecretarias.find(s => s.secretaria === secretaria);
             if (!secretariaData) return;
+
+            // Verificar se o empenho está ativo
+            if (secretariaData.status !== 'ativo') {
+                container.innerHTML = `
+                    <div class="col-span-4 bg-red-50 rounded-lg p-4 text-center border border-red-200">
+                        <i class="fas fa-exclamation-triangle text-red-500 text-xl mb-2"></i>
+                        <p class="font-medium text-red-600">Empenho Inativo</p>
+                        <p class="text-sm text-gray-600 mt-1">Não é possível realizar abastecimentos</p>
+                    </div>
+                `;
+                return;
+            }
 
             const saldos = {
                 'gasolina': parseFloat(secretariaData.valor_gasolina),
@@ -498,12 +684,14 @@ try {
         }
 
         function salvarInputs() {
+            savedInputs = {}; // Limpar inputs salvos anteriormente
+
             document.querySelectorAll('.abastecimento-item').forEach(item => {
                 const abastecimentoId = item.dataset.id;
                 const form = item.querySelector('form');
 
                 if (form) {
-                    const inputs = form.querySelectorAll('input, select');
+                    const inputs = form.querySelectorAll('input, select, textarea');
                     inputs.forEach(input => {
                         if (input.name) {
                             savedInputs[`${abastecimentoId}_${input.name}`] = input.value;
@@ -519,11 +707,13 @@ try {
                 const form = item.querySelector('form');
 
                 if (form) {
-                    const inputs = form.querySelectorAll('input, select');
+                    const inputs = form.querySelectorAll('input, select, textarea');
                     inputs.forEach(input => {
-                        if (input.name && savedInputs[`${abastecimentoId}_${input.name}`]) {
-                            input.value = savedInputs[`${abastecimentoId}_${input.name}`];
-                            // Disparar evento para calcular valor se necessário
+                        const savedValue = savedInputs[`${abastecimentoId}_${input.name}`];
+                        if (input.name && savedValue !== undefined) {
+                            input.value = savedValue;
+
+                            // Disparar eventos para atualizar cálculos
                             if (input.name === 'litros' || input.name === 'combustivel') {
                                 const event = new Event(input.name === 'litros' ? 'input' : 'change');
                                 input.dispatchEvent(event);
@@ -531,317 +721,17 @@ try {
                         }
                     });
                 }
+
+                // Reaplicar saldos das secretarias
+                const secretariaElement = item.querySelector('.secretaria-value');
+                if (secretariaElement) {
+                    const secretaria = secretariaElement.value;
+                    const container = item.querySelector('.saldos-secretaria-container');
+                    if (secretaria && container) {
+                        inicializarSaldosSecretaria(secretaria, container);
+                    }
+                }
             });
-        }
-
-        function atualizarAbastecimentos() {
-            salvarInputs();
-
-            fetch('atualizar_abastecimentos.php', {
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    console.error(data.error);
-                    return;
-                }
-
-                // Atualizar seção de abastecimentos pendentes
-                const pendentesContainer = document.querySelector('.abastecimentos-pendentes-container');
-                if (pendentesContainer) {
-                    if (data.pendentes.length === 0) {
-                        pendentesContainer.innerHTML = `
-                            <div class="text-center py-8">
-                                <i class="fas fa-check-circle text-gray-300 text-4xl mb-3"></i>
-                                <p class="text-gray-600">Nenhum abastecimento pendente para este posto.</p>
-                            </div>
-                        `;
-                    } else {
-                        pendentesContainer.innerHTML = data.pendentes.map(abastecimento => `
-                            <div class="border border-gray-200 rounded-xl p-5 shadow-soft abastecimento-item" data-id="${abastecimento.id}">
-                                <form method="POST" class="space-y-4">
-                                    <input type="hidden" name="abastecimento_id" value="${abastecimento.id}">
-                                    <input type="hidden" class="secretaria-value" value="${abastecimento.motorista_secretaria}">
-
-                                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                        <!-- Coluna 1: Foto e informações do motorista -->
-                                        <div class="input-field bg-gray-50 rounded-xl p-3 border border-gray-200 col-span-1">
-                                            <label class="block text-xs font-medium text-gray-500 mb-2">Motorista</label>
-                                            <div class="flex items-center space-x-3">
-                                                <!-- Foto do motorista (clique para ampliar) -->
-                                                <div class="flex-shrink-0">
-                                                    ${abastecimento.motorista_foto ? `
-                                                        <img src="../uploads/${abastecimento.motorista_foto}"
-                                                             class="w-12 h-12 rounded-full object-cover cursor-pointer"
-                                                             onclick="ampliarFoto('../uploads/${abastecimento.motorista_foto}')">
-                                                    ` : `
-                                                        <div class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
-                                                            <i class="fas fa-user text-gray-400"></i>
-                                                        </div>
-                                                    `}
-                                                </div>
-
-                                                <div class="min-w-0 flex-1">
-                                                    <p class="text-sm font-medium text-gray-900 truncate">
-                                                        ${abastecimento.motorista_name}
-                                                    </p>
-                                                    <p class="text-xs text-gray-500 truncate">
-                                                        CPF: ${formatarCPF(abastecimento.motorista_cpf)}
-                                                    </p>
-                                                </div>
-                                            </div>
-
-                                            <!-- Informações adicionais -->
-                                            <div class="mt-2 space-y-1">
-                                                <p class="text-xs text-gray-600">
-                                                    <span class="font-medium">Secretaria:</span>
-                                                    ${abastecimento.motorista_secretaria || 'Não informado'}
-                                                </p>
-                                                <p class="text-xs text-gray-600">
-                                                    <span class="font-medium">Veículo:</span>
-                                                    ${abastecimento.nome_veiculo || 'Não informado'}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        <!-- Coluna 2: Veículo -->
-                                        <div class="input-field bg-gray-50 rounded-xl p-3 border border-gray-200">
-                                            <label class="block text-xs font-medium text-gray-500 mb-1">Veículo</label>
-                                            <div class="flex items-center">
-                                                <i class="fas fa-car text-gray-400 mr-2"></i>
-                                                <input type="text" class="w-full bg-transparent focus:outline-none"
-                                                       value="${abastecimento.veiculo_nome} - ${abastecimento.placa}" readonly>
-                                            </div>
-                                        </div>
-
-                                        <!-- Coluna 3: KM -->
-                                        <div class="input-field bg-gray-50 rounded-xl p-3 border border-gray-200">
-                                            <label class="block text-xs font-medium text-gray-500 mb-1">KM</label>
-                                            <div class="flex items-center">
-                                                <i class="fas fa-tachometer-alt text-gray-400 mr-2"></i>
-                                                <input type="text" class="w-full bg-transparent focus:outline-none"
-                                                       value="${abastecimento.km_abastecido}" readonly>
-                                            </div>
-                                        </div>
-
-                                        <!-- Coluna 4: Data/Hora -->
-                                        <div class="input-field bg-gray-50 rounded-xl p-3 border border-gray-200">
-                                            <label class="block text-xs font-medium text-gray-500 mb-1">Data/Hora</label>
-                                            <div class="flex items-center">
-                                                <i class="far fa-clock text-gray-400 mr-2"></i>
-                                                <input type="text" class="w-full bg-transparent focus:outline-none"
-                                                       value="${new Date(abastecimento.data_criacao).toLocaleString('pt-BR')}" readonly>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        <div class="input-field rounded-xl p-3 border border-gray-200">
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Litros*</label>
-                                            <input type="text" name="litros" class="w-full bg-transparent focus:outline-none litros-input"
-                                                           placeholder="Ex: 30.50" required>
-                                            <p class="text-xs text-gray-500 mt-2">Capacidade: ${abastecimento.tanque_veiculo} litros</p>
-                                        </div>
-
-                                        <div class="input-field rounded-xl p-3 border border-gray-200">
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Combustível</label>
-                                            <input type="text" class="w-full bg-transparent focus:outline-none"
-                                                   value="${abastecimento.combustivel_veiculo === 'Diesel-S500' ? 'Diesel' : abastecimento.combustivel_veiculo}" readonly>
-                                            <input type="hidden" name="combustivel"
-                                                   value="${abastecimento.combustivel_veiculo === 'Diesel-S500' ? 'Diesel' : abastecimento.combustivel_veiculo}">
-                                        </div>
-
-                                        <div class="input-field rounded-xl p-3 border border-gray-200">
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Valor (R$)*</label>
-                                            <input type="text" name="valor" class="w-full bg-transparent focus:outline-none valor-input"
-                                                           placeholder="Será calculado automaticamente" readonly>
-                                        </div>
-                                    </div>
-
-                                    <div class="grid grid-cols-1 md:grid-cols-4 gap-2 saldos-secretaria-container">
-                                        <div class="bg-blue-50 rounded-lg p-2 text-center border border-blue-100">
-                                            <i class="fas fa-gas-pump text-blue-500 mb-1"></i>
-                                            <p class="text-xs text-gray-600">Saldo Gasolina</p>
-                                            <p class="font-medium text-blue-600 saldo-gasolina">R$ 0,00</p>
-                                        </div>
-                                        <div class="bg-green-50 rounded-lg p-2 text-center border border-green-100">
-                                            <i class="fas fa-leaf text-green-500 mb-1"></i>
-                                            <p class="text-xs text-gray-600">Saldo Etanol</p>
-                                            <p class="font-medium text-green-600 saldo-etanol">R$ 0,00</p>
-                                        </div>
-                                        <div class="bg-yellow-50 rounded-lg p-2 text-center border border-yellow-100">
-                                            <i class="fas fa-truck text-yellow-500 mb-1"></i>
-                                            <p class="text-xs text-gray-600">Saldo Diesel</p>
-                                            <p class="font-medium text-yellow-600 saldo-diesel">R$ 0,00</p>
-                                        </div>
-                                        <div class="bg-purple-50 rounded-lg p-2 text-center border border-purple-100">
-                                            <i class="fas fa-truck text-purple-500 mb-1"></i>
-                                            <p class="text-xs text-gray-600">Saldo Diesel S10</p>
-                                            <p class="font-medium text-purple-600 saldo-diesel-s10">R$ 0,00</p>
-                                        </div>
-                                    </div>
-
-                                    <div class="pt-2">
-                                        <button type="submit" name="preencher_abastecimento"
-                                                class="w-full py-3 px-4 bg-success text-white font-medium rounded-xl hover:bg-green-700 transition duration-200 flex items-center justify-center gap-2">
-                                            <i class="fas fa-check-circle"></i>
-                                            <span>Registrar Abastecimento</span>
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        `).join('');
-                    }
-                }
-
-                // Atualizar seção de abastecimentos preenchidos
-                const preenchidosContainer = document.querySelector('.abastecimentos-preenchidos-container');
-                if (preenchidosContainer) {
-                    if (data.preenchidos.length === 0) {
-                        preenchidosContainer.innerHTML = `
-                            <div class="text-center py-8">
-                                <i class="fas fa-check-circle text-gray-300 text-4xl mb-3"></i>
-                                <p class="text-gray-600">Nenhum abastecimento aguardando assinatura.</p>
-                            </div>
-                        `;
-                    } else {
-                        preenchidosContainer.innerHTML = data.preenchidos.map(abastecimento => `
-                            <div class="border border-gray-200 rounded-xl p-5 shadow-soft abastecimento-item relative ${abastecimento.status === 'concluido' ? 'border-l-4 border-green-500' : 'border-l-4 border-yellow-500'}" data-id="${abastecimento.id}">
-                                ${abastecimento.status === 'concluido' ? `
-                                    <div class="absolute top-0 right-0 -mt-2 -mr-2 bg-green-500 text-white rounded-full w-6 h-6 flex items-center justify-center">
-                                        <i class="fas fa-check text-xs"></i>
-                                    </div>
-                                ` : ''}
-                                <div class="space-y-4">
-                                    ${abastecimento.status === 'concluido' ? `
-                                        <div class="bg-green-50 border-l-4 border-green-500 p-4 mb-4">
-                                            <div class="flex items-center">
-                                                <div class="flex-shrink-0">
-                                                    <i class="fas fa-check-circle text-green-500"></i>
-                                                </div>
-                                                <div class="ml-3">
-                                                    <p class="text-sm text-green-700">
-                                                        Abastecimento concluído e assinado por <span class="font-medium">${abastecimento.motorista_name}</span>
-                                                        ${abastecimento.data_assinatura ? `
-                                                            em ${new Date(abastecimento.data_assinatura).toLocaleString('pt-BR')}
-                                                        ` : ''}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ` : ''}
-
-                                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                        <!-- Coluna 1: Foto e informações do motorista -->
-                                        <div class="input-field bg-gray-50 rounded-xl p-3 border border-gray-200 col-span-1">
-                                            <label class="block text-xs font-medium text-gray-500 mb-2">Motorista</label>
-                                            <div class="flex items-center space-x-3">
-                                                <!-- Foto do motorista (clique para ampliar) -->
-                                                <div class="flex-shrink-0">
-                                                    ${abastecimento.motorista_foto ? `
-                                                        <img src="../uploads/${abastecimento.motorista_foto}"
-                                                             class="w-12 h-12 rounded-full object-cover cursor-pointer"
-                                                             onclick="ampliarFoto('../uploads/${abastecimento.motorista_foto}')">
-                                                    ` : `
-                                                        <div class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
-                                                            <i class="fas fa-user text-gray-400"></i>
-                                                        </div>
-                                                    `}
-                                                </div>
-
-                                                <div class="min-w-0 flex-1">
-                                                    <p class="text-sm font-medium text-gray-900 truncate">
-                                                        ${abastecimento.motorista_name}
-                                                    </p>
-                                                    <p class="text-xs text-gray-500 truncate">
-                                                        CPF: ${formatarCPF(abastecimento.motorista_cpf)}
-                                                    </p>
-                                                </div>
-                                            </div>
-
-                                            <!-- Informações adicionais -->
-                                            <div class="mt-2 space-y-1">
-                                                <p class="text-xs text-gray-600">
-                                                    <span class="font-medium">Secretaria:</span>
-                                                    ${abastecimento.motorista_secretaria || 'Não informado'}
-                                                </p>
-                                                <p class="text-xs text-gray-600">
-                                                    <span class="font-medium">Veículo:</span>
-                                                    ${abastecimento.nome_veiculo || 'Não informado'}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        <!-- Coluna 2: Veículo -->
-                                        <div class="input-field bg-gray-50 rounded-xl p-3 border border-gray-200">
-                                            <label class="block text-xs font-medium text-gray-500 mb-1">Veículo</label>
-                                            <div class="flex items-center">
-                                                <i class="fas fa-car text-gray-400 mr-2"></i>
-                                                <input type="text" class="w-full bg-transparent focus:outline-none"
-                                                       value="${abastecimento.veiculo_nome} - ${abastecimento.placa}" readonly>
-                                            </div>
-                                        </div>
-
-                                        <!-- Coluna 3: KM -->
-                                        <div class="input-field bg-gray-50 rounded-xl p-3 border border-gray-200">
-                                            <label class="block text-xs font-medium text-gray-500 mb-1">KM</label>
-                                            <div class="flex items-center">
-                                                <i class="fas fa-tachometer-alt text-gray-400 mr-2"></i>
-                                                <input type="text" class="w-full bg-transparent focus:outline-none"
-                                                       value="${abastecimento.km_abastecido}" readonly>
-                                            </div>
-                                        </div>
-
-                                        <!-- Coluna 4: Data/Hora -->
-                                        <div class="input-field bg-gray-50 rounded-xl p-3 border border-gray-200">
-                                            <label class="block text-xs font-medium text-gray-500 mb-1">Data/Hora</label>
-                                            <div class="flex items-center">
-                                                <i class="far fa-clock text-gray-400 mr-2"></i>
-                                                <input type="text" class="w-full bg-transparent focus:outline-none"
-                                                       value="${new Date(abastecimento.data_criacao).toLocaleString('pt-BR')}" readonly>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        <div class="input-field bg-gray-50 rounded-xl p-3 border border-gray-200">
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Litros</label>
-                                            <input type="text" class="w-full bg-transparent focus:outline-none"
-                                                   value="${abastecimento.litros}" readonly>
-                                        </div>
-
-                                        <div class="input-field bg-gray-50 rounded-xl p-3 border border-gray-200">
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Combustível</label>
-                                            <input type="text" class="w-full bg-transparent focus:outline-none"
-                                                   value="${abastecimento.combustivel}" readonly>
-                                        </div>
-
-                                        <div class="input-field bg-gray-50 rounded-xl p-3 border border-gray-200">
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Valor (R$)</label>
-                                            <input type="text" class="w-full bg-transparent focus:outline-none"
-                                                   value="${parseFloat(abastecimento.valor).toFixed(2).replace('.', ',')}" readonly>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        `).join('');
-                    }
-                }
-
-                // Restaurar valores dos inputs
-                restaurarInputs();
-
-                // Reaplicar event listeners
-                document.querySelectorAll('.litros-input').forEach(input => {
-                    input.addEventListener('input', function() {
-                        formatarLitros(this);
-                    });
-                });
-            })
-            .catch(error => console.error('Erro ao atualizar:', error));
         }
 
         function mostrarDetalhesMotorista(dados) {
@@ -1007,10 +897,33 @@ try {
 
             // Inicializar saldos quando a página carrega
             document.querySelectorAll('.abastecimento-item').forEach(item => {
-                const secretaria = item.querySelector('.secretaria-value').value;
-                const container = item.querySelector('.saldos-secretaria-container');
-                inicializarSaldosSecretaria(secretaria, container);
+                const secretariaElement = item.querySelector('.secretaria-value');
+                if (secretariaElement) {
+                    const secretaria = secretariaElement.value;
+                    const container = item.querySelector('.saldos-secretaria-container');
+                    inicializarSaldosSecretaria(secretaria, container);
+                }
             });
+
+            // Iniciar a atualização automática quando o documento estiver pronto
+            setInterval(atualizarSecoes, 30000);
+
+            // Adicionar um indicador visual para as atualizações
+            const atualizarIndicador = document.createElement('div');
+            atualizarIndicador.className = 'fixed bottom-4 right-4 bg-primary text-white px-3 py-2 rounded-full shadow-lg hidden z-50 atualizar-indicador';
+            atualizarIndicador.innerHTML = '<i class="fas fa-sync-alt fa-spin mr-2"></i> Atualizando...';
+            document.body.appendChild(atualizarIndicador);
+
+            // Configurar o evento para o botão de atualização manual
+            reativarEventos();
+
+            // Quando uma atualização automática ocorrer
+            setInterval(() => {
+                atualizarIndicador.classList.remove('hidden');
+                setTimeout(() => {
+                    atualizarIndicador.classList.add('hidden');
+                }, 1000);
+            }, 30000);
         });
 
         function filtrarAbastecimentos(tipo) {
@@ -1059,21 +972,25 @@ try {
 <body>
     <div class="min-h-screen bg-gray-50">
         <!-- Header -->
-        <div class="logo-container shadow-hard">
-            <div class="container mx-auto px-4 py-6">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center space-x-4">
-                        <div class="bg-white/20 p-3 rounded-full">
-                            <i class="fas fa-gas-pump text-white text-2xl"></i>
-                        </div>
-                        <h1 class="text-white text-2xl font-bold">Registrar Abastecimento</h1>
+    <div class="logo-container shadow-hard">
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex flex-col items-center text-center space-y-4 md:flex-row md:items-center md:justify-between">
+                <div class="flex items-center space-x-4">
+                    <a href="../menu_posto.php" class="bg-white/20 p-3 rounded-full hover:bg-white/30 transition">
+                        <i class="fas fa-arrow-left text-white text-2xl"></i>
+                    </a>
+                    <div class="bg-white/20 p-3 rounded-full">
+                        <i class="fas fa-gas-pump text-white text-2xl"></i>
                     </div>
-                    <div class="text-white">
-                        <span class="font-medium"><?= $_SESSION['user_name'] ?></span>
-                    </div>
+                </div>
+                <div class="text-white text-center">
+             <span class="font-bold text-2xl md:text-2xl leading-tight break-words text-center block">
+                <?= $_SESSION['user_name'] ?>
+            </span>
                 </div>
             </div>
         </div>
+    </div>
 
         <!-- Main Content -->
         <div class="container mx-auto px-4 py-6 max-w-6xl">
@@ -1099,6 +1016,14 @@ try {
                 </script>
             <?php endif; ?>
 
+            <!-- Botão de atualização manual -->
+            <div class="bg-white rounded-2xl shadow-hard mb-4 overflow-hidden w-full">
+                <button id="atualizar-manualmente" class="w-full py-3 bg-primary text-white px-4 font-medium hover:bg-primary-dark transition flex items-center justify-center gap-2">
+                    <i class="fas fa-sync-alt"></i>
+                    <span>Atualizar dados em tempo real</span>
+                </button>
+            </div>
+
             <!-- Abastecimentos Pendentes -->
             <div class="bg-white rounded-2xl shadow-hard overflow-hidden mb-8">
                 <div class="bg-primary-dark px-6 py-4">
@@ -1116,49 +1041,60 @@ try {
                     <?php else: ?>
                         <div class="space-y-6">
                             <?php foreach ($abastecimentos as $abastecimento): ?>
-                                <div class="border border-gray-200 rounded-xl p-5 shadow-soft abastecimento-item" data-id="<?= $abastecimento['id'] ?>">
+                                    <div class="relative border border-gray-200 rounded-xl p-5 shadow-soft abastecimento-item" data-id="<?= $abastecimento['id'] ?>">
+                                        <!-- Botão de excluir -->
+                                        <button onclick="confirmarExclusao(<?= $abastecimento['id'] ?>)" class="btn-excluir">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                 
+
+                                    <!-- Foto do motorista em container quadrado grande acima das informações -->
+                                    <div class="motorista-photo-container mb-6">
+                                        <div class="bg-gray-50 rounded-xl p-4 border border-gray-200 w-full max-w-md mx-auto">
+                                            <label class="motorista-photo-label">Motorista</label>
+                                            <div class="flex flex-col items-center">
+                                                <?php if (!empty($abastecimento['motorista_foto'])): ?>
+                                                    <img src="../uploads/<?= basename($abastecimento['motorista_foto']) ?>"
+                                                         class="motorista-photo cursor-pointer"
+                                                         onclick="ampliarFoto('../uploads/<?= basename($abastecimento['motorista_foto']) ?>')">
+                                                <?php else: ?>
+                                                    <div class="motorista-photo bg-gray-200 flex items-center justify-center">
+                                                        <i class="fas fa-user text-gray-400 text-6xl"></i>
+                                                    </div>
+                                                <?php endif; ?>
+                                                <div class="mt-4 text-center">
+                                                    <p class="text-sm font-medium text-gray-900">
+                                                        <?= $abastecimento['motorista_name'] ?>
+                                                    </p>
+                                                    <p class="text-xs text-gray-500">
+                                                        CPF: <?= formatarCPF($abastecimento['motorista_cpf']) ?>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <form method="POST" class="space-y-4">
                                         <input type="hidden" name="abastecimento_id" value="<?= $abastecimento['id'] ?>">
                                         <input type="hidden" class="secretaria-value" value="<?= $abastecimento['motorista_secretaria'] ?>">
 
                                         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                            <!-- Coluna 1: Foto e informações do motorista -->
-                                            <div class="input-field bg-gray-50 rounded-xl p-3 border border-gray-200 col-span-1">
-                                                <label class="block text-xs font-medium text-gray-500 mb-2">Motorista</label>
-                                                <div class="flex items-center space-x-3">
-                                                    <!-- Foto do motorista (clique para ampliar) -->
-                                                    <div class="flex-shrink-0">
-                                                        <?php if (!empty($abastecimento['motorista_foto'])): ?>
-                                                            <img src="../uploads/<?= basename($abastecimento['motorista_foto']) ?>"
-                                                                 class="w-12 h-12 rounded-full object-cover cursor-pointer"
-                                                                 onclick="ampliarFoto('../uploads/<?= basename($abastecimento['motorista_foto']) ?>')">
-                                                        <?php else: ?>
-                                                            <div class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
-                                                                <i class="fas fa-user text-gray-400"></i>
-                                                            </div>
-                                                        <?php endif; ?>
-                                                    </div>
-
-                                                    <div class="min-w-0 flex-1">
-                                                        <p class="text-sm font-medium text-gray-900 truncate">
-                                                            <?= $abastecimento['motorista_name'] ?>
-                                                        </p>
-                                                        <p class="text-xs text-gray-500 truncate">
-                                                            CPF: <?= formatarCPF($abastecimento['motorista_cpf']) ?>
-                                                        </p>
-                                                    </div>
+                                            <!-- Coluna 1: Informações adicionais -->
+                                            <div class="input-field bg-gray-50 rounded-xl p-3 border border-gray-200">
+                                                <label class="block text-xs font-medium text-gray-500 mb-1">Secretaria</label>
+                                                <div class="flex items-center">
+                                                    <i class="fas fa-building text-gray-400 mr-2"></i>
+                                                    <input type="text" class="w-full bg-transparent focus:outline-none"
+                                                           value="<?= $abastecimento['motorista_secretaria'] ?: 'Não informado' ?>" readonly>
                                                 </div>
 
-                                                <!-- Informações adicionais -->
-                                                <div class="mt-2 space-y-1">
-                                                    <p class="text-xs text-gray-600">
-                                                        <span class="font-medium">Secretaria:</span>
-                                                        <?= $abastecimento['motorista_secretaria'] ?: 'Não informado' ?>
-                                                    </p>
-                                                    <p class="text-xs text-gray-600">
-                                                        <span class="font-medium">Veículo:</span>
-                                                        <?= $abastecimento['nome_veiculo'] ?: 'Não informado' ?>
-                                                    </p>
+                                                <div class="mt-3">
+                                                    <label class="block text-xs font-medium text-gray-500 mb-1">Veículo</label>
+                                                    <div class="flex items-center">
+                                                        <i class="fas fa-car text-gray-400 mr-2"></i>
+                                                        <input type="text" class="w-full bg-transparent focus:outline-none"
+                                                               value="<?= $abastecimento['nome_veiculo'] ?: 'Não informado' ?>" readonly>
+                                                    </div>
                                                 </div>
                                             </div>
 
@@ -1417,6 +1353,13 @@ try {
         </div>
     </div>
 
+    <!-- Botão flutuante para atualização -->
+    <div class="fixed bottom-4 left-4 z-50">
+        <button id="botao-flutuante" class="bg-primary text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center hover:bg-primary-dark transition">
+            <i class="fas fa-sync-alt text-lg"></i>
+        </button>
+    </div>
+
     <!-- Modal de detalhes do motorista -->
     <div id="motoristaModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
         <div class="bg-white rounded-xl p-6 w-full max-w-md">
@@ -1483,6 +1426,33 @@ try {
             </div>
         </div>
     </div>
+
+    <script>
+    document.getElementById('botao-flutuante').addEventListener('click', function(e) {
+        e.preventDefault();
+        console.log('Botão flutuante clicado');
+
+        // Mostrar indicador de carregamento
+        const atualizarIndicador = document.querySelector('.atualizar-indicador') ||
+                                document.createElement('div');
+        atualizarIndicador.className = 'fixed bottom-4 right-4 bg-primary text-white px-3 py-2 rounded-full shadow-lg z-50 atualizar-indicador';
+        atualizarIndicador.innerHTML = '<i class="fas fa-sync-alt fa-spin mr-2"></i> Atualizando...';
+
+        if (!document.querySelector('.atualizar-indicador')) {
+            document.body.appendChild(atualizarIndicador);
+        } else {
+            atualizarIndicador.classList.remove('hidden');
+        }
+
+        // Executar a função de atualização
+        atualizarSecoes();
+
+        // Esconder o indicador após um tempo
+        setTimeout(() => {
+            atualizarIndicador.classList.add('hidden');
+        }, 1000);
+    });
+    </script>
 </body>
 </html>
 

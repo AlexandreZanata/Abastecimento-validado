@@ -7,11 +7,10 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'geraladm') {
     exit();
 }
 
-// Conexão com o banco de dados
-$host = "localhost";
-$dbname = "workflow_system";
-$username = "root";
-$password = "";
+$host = "localhost"; 
+$dbname = "workflow_system"; 
+$username = "root"; 
+$password = ""; 
 
 try {
     $conn = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $username, $password);
@@ -293,506 +292,582 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cadastrar_secretaria'
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* Estilos mantidos iguais */
+        /* Cores atualizadas */
         :root {
             --primary-color: #4338CA;
+            --primary-light: #6366F1;
             --secondary-color: #10B981;
             --danger-color: #EF4444;
             --background-color: #F9FAFB;
             --card-bg: #FFFFFF;
             --text-dark: #1F2937;
             --text-light: #6B7280;
+            --border-color: #E5E7EB;
         }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--background-color);
-            color: var(--text-dark);
-            line-height: 1.5;
-            padding-bottom: 4rem;
-        }
-
-        .header-gradient {
-            background: linear-gradient(135deg, #4F46E5, #4338CA);
-            padding: 1rem;
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-        }
-
-        .card {
-            background: var(--card-bg);
-            border-radius: 1rem;
-            padding: 1.25rem;
-            margin: 1rem 0;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
-            transition: transform 0.2s ease;
-        }
-
-        .card:hover {
-            transform: translateY(-2px);
-        }
-
-        .btn {
-            border-radius: 0.75rem;
-            padding: 0.65rem 1.25rem;
-            font-weight: 500;
-            font-size: 0.9rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s ease;
-        }
-
-        .btn-primary {
-            background-color: var(--primary-color);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background-color: #4B5563;
-            transform: translateY(-1px);
-        }
-
-        .btn-secondary {
-            background-color: var(--secondary-color);
-            color: white;
-        }
-
-        .btn-secondary:hover {
-            background-color: #059669;
-            transform: translateY(-1px);
-        }
-
-        .btn-danger {
-            background-color: var(--danger-color);
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background-color: #DC2626;
-            transform: translateY(-1px);
-        }
-
+        /* Inputs melhorados */
         .input-field {
-            border: 1px solid #E5E7EB;
+            border: 2px solid var(--border-color);
             border-radius: 0.5rem;
-            padding: 0.65rem 0.75rem;
+            padding: 0.75rem;
             width: 100%;
             background: white;
-            font-size: 0.9rem;
-            transition: border-color 0.2s ease;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
         }
 
         .input-field:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 2px rgba(107, 114, 128, 0.1);
+            border-color: var(--primary-light);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
             outline: none;
         }
 
-        .message-container {
-            position: fixed;
-            top: 4rem;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 90%;
-            max-width: 24rem;
-            padding: 0.75rem 1rem;
-            border-radius: 0.75rem;
-            background: white;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            text-align: center;
-            font-size: 0.9rem;
-            animation: slideIn 0.3s ease;
-            z-index: 1000;
-        }
-
-        @keyframes slideIn {
-            from { transform: translateX(-50%) translateY(-10px); opacity: 0; }
-            to { transform: translateX(-50%) translateY(0); opacity: 1; }
-        }
-
-        .success {
-            color: var(--secondary-color);
-            border: 1px solid var(--secondary-color);
-        }
-
-        .error {
-            color: var(--danger-color);
-            border: 1px solid var(--danger-color);
-        }
-
-        .floating-action-btn {
-            position: fixed;
-            bottom: 1.25rem;
-            right: 1.25rem;
-            width: 3rem;
-            height: 3rem;
-            border-radius: 50%;
-            background: var(--primary-color);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            transition: all 0.2s ease;
-        }
-
-        .floating-action-btn:hover {
-            background-color: #4B5563;
-            transform: scale(1.05);
-        }
-
-        .badge {
-            padding: 0.35rem 0.75rem;
-            border-radius: 1rem;
-            font-size: 0.75rem;
+        /* Labels mais destacados */
+        .form-label {
+            display: block;
+            font-size: 0.95rem;
             font-weight: 500;
-            display: inline-flex;
-            align-items: center;
             color: var(--text-dark);
-            background: #F3F4F6;
-        }
-
-        .badge i {
-            margin-right: 0.25rem;
-        }
-
-        .stats-card {
-            border-radius: 0.75rem;
-            padding: 1rem;
-            background: white;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
-            transition: all 0.2s ease;
-        }
-
-        .stats-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        }
-
-        .icon-circle {
-            width: 2rem;
-            height: 2rem;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(0,0,0,0.05);
-        }
-
-        .secretaria-item {
-            border: 1px solid #E5E7EB;
-            border-radius: 0.75rem;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            background: white;
-            transition: all 0.2s ease;
-        }
-
-        .secretaria-item:hover {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        }
-
-        .combustivel-icon {
-            width: 1.5rem;
-            height: 1.5rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 0.5rem;
-            color: #6B7280;
-        }
-
-        .valor-input {
-            width: 100%;
-            padding: 0.5rem;
-            border: 1px solid #E5E7EB;
-            border-radius: 0.5rem;
-            text-align: right;
-        }
-
-        .valor-input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-        }
-
-        /* Estilo para o autocomplete */
-        .autocomplete {
-            position: relative;
-            display: inline-block;
-            width: 100%;
-        }
-
-        .autocomplete-items {
-            position: absolute;
-            border: 1px solid #d4d4d4;
-            border-bottom: none;
-            border-top: none;
-            z-index: 99;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background: white;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-
-        .autocomplete-items div {
-            padding: 10px;
-            cursor: pointer;
-            background-color: #fff;
-            border-bottom: 1px solid #d4d4d4;
-        }
-
-        .autocomplete-items div:hover {
-            background-color: #e9e9e9;
-        }
-
-        .autocomplete-active {
-            background-color: var(--primary-color) !important;
-            color: #ffffff;
-        }
-
-        /* Estilo para a visualização do empenho */
-        .empenho-info {
-            background-color: #f8f9fa;
-            border-radius: 0.5rem;
-            padding: 1rem;
-            margin-top: 1rem;
-            border: 1px solid #e9ecef;
-        }
-
-        .empenho-info p {
             margin-bottom: 0.5rem;
-            font-size: 0.9rem;
         }
 
-        .empenho-info strong {
-            color: var(--primary-color);
+        /* Cards com sombra mais suave */
+        .card {
+            background: var(--card-bg);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid var(--border-color);
         }
 
-        @media (max-width: 768px) {
-            .card {
-                padding: 1rem;
-                margin: 0.5rem 0;
-            }
-            .btn {
-                padding: 0.5rem 1rem;
-                font-size: 0.85rem;
-            }
-            .floating-action-btn {
-                width: 2.5rem;
-                height: 2.5rem;
-            }
-            .stats-card {
-                padding: 0.75rem;
-            }
-        }
-        /* Adicione este estilo */
-        .empenho-info {
-            background-color: #f8f9fa;
-            border-radius: 0.5rem;
+        /* Seção de combustíveis mais organizada */
+        .fuel-section {
+            background: #F8FAFC;
+            border-radius: 0.75rem;
             padding: 1.5rem;
             margin-top: 1rem;
-            border: 1px solid #e9ecef;
+            border: 1px solid var(--border-color);
+        }
+
+        .fuel-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem;
+            background: white;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-color);
+            margin-bottom: 0.75rem;
+        }
+
+        .fuel-icon {
+            width: 2rem;
+            height: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+            color: var(--primary-color);
+            background: #EEF2FF;
+            border-radius: 50%;
+        }
+
+        /* Botões mais destacados */
+        .btn {
+            border-radius: 0.75rem;
+            padding: 0.75rem 1.5rem;
+            font-weight: 500;
+            font-size: 0.95rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .btn i {
+            margin-right: 0.5rem;
+        }
+
+        /* Valores dos combustíveis sem o zero padrão */
+        .fuel-input {
+            width: 100%;
+            padding: 0.65rem;
+            border: 2px solid var(--border-color);
+            border-radius: 0.5rem;
+            text-align: right;
+            font-size: 0.95rem;
+        }
+
+        .fuel-input:focus {
+            border-color: var(--primary-light);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+            outline: none;
+        }
+
+        /* Informações do empenho mais organizadas */
+        .empenho-info {
+            background-color: #F8FAFC;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-top: 1rem;
+            border: 1px solid var(--border-color);
         }
 
         .empenho-info p {
             margin-bottom: 0.75rem;
             font-size: 0.95rem;
-            padding: 0.5rem;
+            padding: 0.75rem;
             background-color: white;
-            border-radius: 0.25rem;
-            border: 1px solid #e9ecef;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-color);
+            display: flex;
         }
 
         .empenho-info strong {
             color: var(--primary-color);
-            min-width: 100px;
+            min-width: 120px;
             display: inline-block;
+            font-weight: 500;
+        }
+
+        /* Títulos mais destacados */
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid #EEF2FF;
+        }
+
+        .subsection-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin: 1.5rem 0 1rem 0;
+        }
+
+        /* Estilo para as abas */
+        .tab-container {
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .tab-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .tab-button {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem 0.5rem 0 0;
+            background-color: #E5E7EB;
+            color: var(--text-dark);
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+        }
+
+        .tab-button.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .tab-button:hover:not(.active) {
+            background-color: #D1D5DB;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Melhorar mensagens */
+        .message-container {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .message-container.error {
+            background-color: #FEE2E2;
+            color: #B91C1C;
+            border-left: 4px solid #EF4444;
+        }
+
+        .message-container.success {
+            background-color: #D1FAE5;
+            color: #065F46;
+            border-left: 4px solid #10B981;
+        }
+
+        .message-container i {
+            font-size: 1.25rem;
+        }
+
+        /* Melhorar botões */
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-light);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .btn-secondary {
+            background-color: var(--secondary-color);
+            color: white;
+            border: none;
+        }
+
+        .btn-secondary:hover {
+            background-color: #059669;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        /* Estilos para o autocomplete */
+        .autocomplete {
+            position: relative;
+        }
+
+        .autocomplete-items {
+            position: absolute;
+            border: 2px solid var(--border-color);
+            border-radius: 0.75rem;
+            background: white;
+            width: 100%;
+            z-index: 1000;
+            margin-top: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .autocomplete-item {
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+
+        .autocomplete-item:hover {
+            background-color: #F8FAFC;
+        }
+
+        .autocomplete-item.active {
+            background-color: var(--primary-light);
+            color: white;
+        }
+
+        .autocomplete-number {
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .autocomplete-fornecedor {
+            font-size: 0.875rem;
+            color: var(--text-light);
+        }
+
+        .no-results {
+            padding: 1rem;
+            color: var(--text-light);
+            font-style: italic;
         }
     </style>
 </head>
 <body>
+    <!-- Substitua o header-gradient atual por este: -->
     <div class="header-gradient text-white">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
-            <div class="flex items-center space-x-2">
-                <i class="fas fa-gas-pump text-xl"></i>
-                <h1 class="text-lg font-semibold">Cadastro de Empenhos - Combustível</h1>
+            <div class="flex items-center space-x-3">
+                <i class="fas fa-gas-pump text-2xl text-white bg-primary-500 p-2 rounded-lg"></i>
+                <h1 class="text-xl font-bold">Cadastro de Empenhos - Combustível</h1>
             </div>
-            <div class="flex items-center space-x-2">
-                <a href="grafico_secretarias.php" class="btn btn-secondary"><i class="fas fa-file-alt mr-1"></i>Relatório</a>
-                <a href="menugeraladm.php" class="btn btn-danger"><i class="fas fa-sign-out-alt mr-1"></i>Sair</a>
+            <div class="flex items-center space-x-3">
+                <a href="grafico_secretarias.php" class="btn btn-secondary">
+                    <i class="fas fa-file-alt"></i>
+                    <span class="hidden md:inline">Relatório</span>
+                </a>
+                <a href="../menugeraladm.php" class="btn btn-danger">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span class="hidden md:inline">Sair</span>
+                </a>
             </div>
         </div>
     </div>
 
+    <!-- Adicione este estilo ao CSS: -->
+    <style>
+        .header-gradient {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+            padding: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .header-gradient h1 {
+            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        /* Botões do header */
+        .header-gradient .btn {
+            border-radius: 0.5rem;
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+            border: 1px solid rgba(255,255,255,0.2);
+            transition: all 0.2s ease;
+        }
+
+        .header-gradient .btn-secondary {
+            background-color: rgba(255,255,255,0.1);
+        }
+
+        .header-gradient .btn-secondary:hover {
+            background-color: rgba(255,255,255,0.2);
+        }
+
+        .header-gradient .btn-danger {
+            background-color: rgba(239, 68, 68, 0.9);
+        }
+
+        .header-gradient .btn-danger:hover {
+            background-color: rgba(220, 38, 38, 0.9);
+        }
+
+        @media (max-width: 640px) {
+            .header-gradient .btn {
+                padding: 0.5rem;
+                min-width: 2.5rem;
+            }
+
+            .header-gradient .btn i {
+                margin-right: 0;
+            }
+        }
+    </style>
+
     <div class="container mx-auto px-4 py-6">
         <?php if (!empty($error_message)): ?>
-            <div class="message-container error"><?= $error_message ?></div>
+            <div class="message-container error">
+                <i class="fas fa-exclamation-circle"></i>
+                <?= $error_message ?>
+            </div>
         <?php endif; ?>
 
         <?php if (!empty($success_message)): ?>
-            <div class="message-container success"><?= $success_message ?></div>
+            <div class="message-container success">
+                <i class="fas fa-check-circle"></i>
+                <?= $success_message ?>
+            </div>
         <?php endif; ?>
 
-        <div class="card">
-            <h2 class="text-xl font-semibold mb-4">Cadastro de Empenho - Total</h2>
-            <form method="POST" id="formEmpenho">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Órgão</label>
-                        <input type="text" name="orgao" class="input-field" value="<?= htmlspecialchars($_POST['orgao'] ?? '') ?>" required>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Unidade</label>
-                        <input type="text" name="unidade" class="input-field" value="<?= htmlspecialchars($_POST['unidade'] ?? '') ?>" required>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Número do Empenho</label>
-                        <input type="text" name="numero_empenho" class="input-field" value="<?= htmlspecialchars($_POST['numero_empenho'] ?? '') ?>" required>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Vigência</label>
-                        <div class="flex space-x-2">
-                            <input type="date" name="vigencia_inicio" class="input-field" value="<?= htmlspecialchars($_POST['vigencia_inicio'] ?? '') ?>" required>
-                            <input type="date" name="vigencia_fim" class="input-field" value="<?= htmlspecialchars($_POST['vigencia_fim'] ?? '') ?>" required>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Fornecedor (Posto de gasolina)</label>
-                        <input type="text" name="fornecedor" class="input-field" value="<?= htmlspecialchars($_POST['fornecedor'] ?? '') ?>" required>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 mb-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Valor Total</label>
-                        <input type="number" step="0.01" name="valor_total" id="valor_total" class="input-field" value="<?= htmlspecialchars($_POST['valor_total'] ?? '') ?>" required>
-                    </div>
-                </div>
-
-                <div class="mt-8 flex justify-end">
-                    <button type="submit" name="cadastrar_empenho" class="btn btn-primary">
-                        <i class="fas fa-save mr-1"></i>Cadastrar Empenho
-                    </button>
-                </div>
-            </form>
+        <div class="tab-container">
+            <div class="tab-buttons">
+                <button type="button" class="tab-button <?= !isset($_POST['cadastrar_secretaria']) ? 'active' : '' ?>" data-tab="tab-empenho">
+                    <i class="fas fa-file-invoice-dollar mr-1"></i>
+                    Cadastro de Empenho - Total
+                </button>
+                <button type="button" class="tab-button <?= isset($_POST['cadastrar_secretaria']) ? 'active' : '' ?>" data-tab="tab-secretaria">
+                    <i class="fas fa-building mr-1"></i>
+                    Adicionar Secretaria ao Empenho
+                </button>
+                <button type="button" class="tab-button" onclick="window.location.href='ativar_empenho.php'">
+                    <i class="fas fa-check-circle mr-1"></i>
+                    Ativar Empenho
+                </button>
+            </div>
         </div>
 
-        <!-- Formulário para adicionar secretaria a um empenho existente -->
-        <div class="card mt-6">
-            <h2 class="text-xl font-semibold mb-4">Adicionar Secretaria ao Empenho</h2>
-            <form method="POST" id="formSecretaria">
-                <div class="grid grid-cols-1 gap-4 mb-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Pesquisar Empenho</label>
-                        <div class="autocomplete">
-                            <input type="text" id="pesquisaEmpenho" class="input-field" placeholder="Digite o número do empenho">
-                            <input type="hidden" name="id_empenho_total" id="id_empenho_total">
+        <!-- Aba de Cadastro de Empenho -->
+        <div id="tab-empenho" class="tab-content <?= !isset($_POST['cadastrar_secretaria']) ? 'active' : '' ?>">
+            <div class="card">
+                <h2 class="section-title">
+                    <i class="fas fa-file-invoice-dollar mr-2"></i>
+                    Cadastro de Empenho - Total
+                </h2>
+                <form method="POST" id="formEmpenho">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="form-label">Órgão</label>
+                            <input type="text" name="orgao" class="input-field" value="<?= htmlspecialchars($_POST['orgao'] ?? '') ?>" required>
                         </div>
-                        <div id="empenhoInfo" class="empenho-info mt-4" style="display: none;">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <p><strong>Número:</strong> <span id="infoNumero"></span></p>
-                                    <p><strong>Fornecedor:</strong> <span id="infoFornecedor"></span></p>
-                                </div>
-                                <div>
-                                    <p><strong>Vigência:</strong> <span id="infoVigencia"></span></p>
-                                    <p><strong>Valor Total:</strong> R$ <span id="infoValorTotal"></span></p>
+                        <div>
+                            <label class="form-label">Unidade</label>
+                            <input type="text" name="unidade" class="input-field" value="<?= htmlspecialchars($_POST['unidade'] ?? '') ?>" required>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div>
+                            <label class="form-label">Número do Empenho</label>
+                            <input type="text" name="numero_empenho" class="input-field" value="<?= htmlspecialchars($_POST['numero_empenho'] ?? '') ?>" required>
+                        </div>
+                        <div>
+                            <label class="form-label">Vigência</label>
+                            <div class="flex space-x-2">
+                                <input type="date" name="vigencia_inicio" class="input-field" value="<?= htmlspecialchars($_POST['vigencia_inicio'] ?? '') ?>" required>
+                                <input type="date" name="vigencia_fim" class="input-field" value="<?= htmlspecialchars($_POST['vigencia_fim'] ?? '') ?>" required>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label">Fornecedor (Posto de gasolina)</label>
+                            <input type="text" name="fornecedor" class="input-field" value="<?= htmlspecialchars($_POST['fornecedor'] ?? '') ?>" required>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 mb-4">
+                        <div>
+                            <label class="form-label">Valor Total</label>
+                            <input type="number" step="0.01" name="valor_total" id="valor_total" class="input-field" value="<?= htmlspecialchars($_POST['valor_total'] ?? '') ?>" required>
+                        </div>
+                    </div>
+
+                    <div class="mt-8 flex justify-end">
+                        <button type="submit" name="cadastrar_empenho" class="btn btn-primary hover:bg-indigo-600 transition-colors">
+                            <i class="fas fa-save mr-2"></i>Cadastrar Empenho
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Aba de Adicionar Secretaria -->
+        <div id="tab-secretaria" class="tab-content <?= isset($_POST['cadastrar_secretaria']) ? 'active' : '' ?>">
+            <div class="card">
+                <h2 class="section-title">
+                    <i class="fas fa-building mr-2"></i>
+                    Adicionar Secretaria ao Empenho
+                </h2>
+                <form method="POST" id="formSecretaria">
+                    <div class="grid grid-cols-1 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Pesquisar Empenho</label>
+                            <div class="autocomplete">
+                                <input type="text" id="pesquisaEmpenho" class="input-field" placeholder="Digite o número do empenho">
+                                <input type="hidden" name="id_empenho_total" id="id_empenho_total">
+                            </div>
+                            <div id="empenhoInfo" class="empenho-info mt-4" style="display: none;">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <p><strong>Número:</strong> <span id="infoNumero"></span></p>
+                                        <p><strong>Fornecedor:</strong> <span id="infoFornecedor"></span></p>
+                                    </div>
+                                    <div>
+                                        <p><strong>Vigência:</strong> <span id="infoVigencia"></span></p>
+                                        <p><strong>Valor Total:</strong> R$ <span id="infoValorTotal"></span></p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Secretaria</label>
-                        <select name="secretaria" class="input-field" required>
-                            <option value="">Selecione uma secretaria</option>
-                            <?php foreach ($secretarias_map as $key => $value): ?>
-                                <option value="<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($value) ?></option>
-                            <?php endforeach; ?>
-                        </select>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Secretaria</label>
+                            <select name="secretaria" class="input-field" required>
+                                <option value="">Selecione uma secretaria</option>
+                                <?php foreach ($secretarias_map as $key => $value): ?>
+                                    <option value="<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($value) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
                     </div>
-                </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Número da Ordem de Fornecimento</label>
-                        <input type="text" name="numero_ordem_fornecimento" class="input-field" required>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Número da Ordem de Fornecimento</label>
+                            <input type="text" name="numero_ordem_fornecimento" class="input-field" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Data da Ordem de Fornecimento</label>
+                            <input type="date" name="data_ordem_fornecimento" class="input-field" required>
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Data da Ordem de Fornecimento</label>
-                        <input type="date" name="data_ordem_fornecimento" class="input-field" required>
-                    </div>
-                </div>
 
-                <h3 class="text-lg font-semibold mt-6 mb-4">Valores por Combustível</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Valor Total</label>
-                        <input type="number" step="0.01" name="s_valor_total" class="input-field" value="0">
-                    </div>
-                </div>
+                    <div class="fuel-section">
+                        <h3 class="subsection-title">Valores por Combustível</h3>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-                    <div class="flex items-center">
-                        <div class="combustivel-icon">
-                            <i class="fas fa-leaf"></i>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <div>
+                                <label class="form-label">Valor Total</label>
+                                <input type="number" step="0.01" name="s_valor_total" class="input-field" placeholder="Digite o valor">
+                            </div>
                         </div>
-                        <div class="flex-1">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Etanol</label>
-                            <input type="number" step="0.01" name="s_valor_etanol" class="input-field" value="0">
-                        </div>
-                    </div>
-                    <div class="flex items-center">
-                        <div class="combustivel-icon">
-                            <i class="fas fa-gas-pump"></i>
-                        </div>
-                        <div class="flex-1">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Gasolina</label>
-                            <input type="number" step="0.01" name="s_valor_gasolina" class="input-field" value="0">
-                        </div>
-                    </div>
-                    <div class="flex items-center">
-                        <div class="combustivel-icon">
-                            <i class="fas fa-truck"></i>
-                        </div>
-                        <div class="flex-1">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Diesel</label>
-                            <input type="number" step="0.01" name="s_valor_diesel" class="input-field" value="0">
-                        </div>
-                    </div>
-                    <div class="flex items-center">
-                        <div class="combustivel-icon">
-                            <i class="fas fa-truck-pickup"></i>
-                        </div>
-                        <div class="flex-1">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Diesel S10</label>
-                            <input type="number" step="0.01" name="s_valor_diesel_s10" class="input-field" value="0">
-                        </div>
-                    </div>
-                </div>
 
-                <div class="mt-8 flex justify-end">
-                    <button type="submit" name="cadastrar_secretaria" class="btn btn-primary">
-                        <i class="fas fa-plus mr-1"></i>Adicionar Secretaria
-                    </button>
-                </div>
-            </form>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="fuel-item">
+                                <div class="fuel-icon">
+                                    <i class="fas fa-leaf"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <label class="form-label">Etanol</label>
+                                    <input type="number" step="0.01" name="s_valor_etanol" class="fuel-input" placeholder="Digite o valor">
+                                </div>
+                            </div>
+
+                            <div class="fuel-item">
+                                <div class="fuel-icon">
+                                    <i class="fas fa-gas-pump"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <label class="form-label">Gasolina</label>
+                                    <input type="number" step="0.01" name="s_valor_gasolina" class="fuel-input" placeholder="Digite o valor">
+                                </div>
+                            </div>
+
+                            <div class="fuel-item">
+                                <div class="fuel-icon">
+                                    <i class="fas fa-truck"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <label class="form-label">Diesel</label>
+                                    <input type="number" step="0.01" name="s_valor_diesel" class="fuel-input" placeholder="Digite o valor">
+                                </div>
+                            </div>
+
+                            <div class="fuel-item">
+                                <div class="fuel-icon">
+                                    <i class="fas fa-truck-pickup"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <label class="form-label">Diesel S10</label>
+                                    <input type="number" step="0.01" name="s_valor_diesel_s10" class="fuel-input" placeholder="Digite o valor">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-8 flex justify-end">
+                        <button type="submit" name="cadastrar_secretaria" class="btn btn-primary hover:bg-indigo-600 transition-colors">
+                            <i class="fas fa-plus mr-2"></i>Adicionar Secretaria
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 
@@ -814,12 +889,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cadastrar_secretaria'
 
                         if (empenhos.length > 0) {
                             empenhos.forEach(empenho => {
-                                html += `<div data-id="${empenho.id}" data-numero="${empenho.numero_empenho}" data-fornecedor="${empenho.fornecedor}">
-                                    ${empenho.numero_empenho} - ${empenho.fornecedor}
+                                html += `
+                                <div class="autocomplete-item"
+                                     data-id="${empenho.id}"
+                                     data-numero="${empenho.numero_empenho}"
+                                     data-fornecedor="${empenho.fornecedor}">
+                                    <div class="autocomplete-number">
+                                        ${empenho.numero_empenho}
+                                    </div>
+                                    <div class="autocomplete-fornecedor">
+                                        ${empenho.fornecedor}
+                                    </div>
                                 </div>`;
                             });
                         } else {
-                            html += '<div>Nenhum empenho encontrado</div>';
+                            html += '<div class="no-results">Nenhum empenho encontrado</div>';
                         }
 
                         html += '</div>';
@@ -831,7 +915,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cadastrar_secretaria'
                         $(html).insertAfter("#pesquisaEmpenho");
 
                         // Configura o clique nos itens
-                        $(".autocomplete-items div").on("click", function() {
+                        $(".autocomplete-item").on("click", function() {
                             const id = $(this).data("id");
                             const numero = $(this).data("numero");
                             const fornecedor = $(this).data("fornecedor");
@@ -849,8 +933,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cadastrar_secretaria'
                                     $("#infoVigencia").text(formatarData(empenho.vigencia_inicio) + " a " + formatarData(empenho.vigencia_fim));
                                     $("#infoValorTotal").text(parseFloat(empenho.valor_total).toFixed(2).replace('.', ','));
                                     $("#empenhoInfo").show();
-
-                                    // Atualizar o campo hidden com o ID do empenho
                                     $("#id_empenho_total").val(empenho.id);
                                 }
                             });
@@ -876,6 +958,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cadastrar_secretaria'
                 const data = new Date(dataStr);
                 return data.toLocaleDateString('pt-BR');
             }
+
+            // Controle das abas
+            $(".tab-button").on("click", function() {
+                const tabId = $(this).data("tab");
+
+                // Remove a classe active de todas as abas e botões
+                $(".tab-button, .tab-content").removeClass("active");
+
+                // Adiciona a classe active apenas na aba e botão clicados
+                $(this).addClass("active");
+                $("#" + tabId).addClass("active");
+            });
+
+            // Se houve um POST de cadastro de secretaria, ativar a aba correspondente
+            <?php if (isset($_POST['cadastrar_secretaria'])): ?>
+                $(document).ready(function() {
+                    $(".tab-button, .tab-content").removeClass("active");
+                    $("[data-tab='tab-secretaria']").addClass("active");
+                    $("#tab-secretaria").addClass("active");
+                });
+            <?php endif; ?>
         });
     </script>
 </body>

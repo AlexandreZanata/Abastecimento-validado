@@ -5,33 +5,34 @@ date_default_timezone_set('America/Cuiaba');
 session_start();
 include '../conexao.php';
 
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'user') {
+if (!isset($_SESSION['user_id'])) {
     header("Location: ../index.php");
     exit();
 }
 
+// Atualização do mapeamento de secretarias
 $secretarias_map = [
-    "Gabinete do Prefeito" => "GABINETE DO PREFEITO",
-    "Gabinete do Vice-Prefeito" => "GABINETE DO VICE-PREFEITO",
-    "Secretaria Municipal da Mulher de Família" => "SECRETARIA DA MULHER",
-    "Secretaria Municipal de Fazenda" => "SECRETARIA DE FAZENDA",
-    "Secretaria Municipal de Educação" => "SECRETARIA DE EDUCAÇÃO",
-    "Secretaria Municipal de Agricultura e Meio Ambiente" => "SECRETARIA DE AGRICULTURA E MEIO AMBIENTE",
-    "Secretaria Municipal de Agricultura Familiar e Segurança Alimentar" => "SECRETARIA DE AGRICULTURA FAMILIAR",
-    "Secretaria Municipal de Assistência Social" => "SECRETARIA DE ASSISTÊNCIA SOCIAL",
-    "Secretaria Municipal de Desenvolvimento Econômico e Turismo" => "SECRETARIA DE DESENV. ECONÔMICO",
-    "Secretaria Municipal de Administração" => "SECRETARIA DE ADMINISTRAÇÃO",
-    "Secretaria Municipal de Governo" => "SECRETARIA DE GOVERNO",
-    "Secretaria Municipal de Infraestrutura, Transportes e Saneamento" => "SECRETARIA DE INFRAESTRUTURA, TRANSPORTE E SANEAMENTO",
-    "Secretaria Municipal de Esporte e Lazer e Juventude" => "SECRETARIA DE ESPORTE E LAZER",
-    "Secretaria Municipal da Cidade" => "SECRETARIA DA CIDADE",
-    "Secretaria Municipal de Saúde" => "SECRETARIA DE SAÚDE",
-    "Secretaria Municipal de Segurança Pública, Trânsito e Defesa Civil" => "SECRETARIA DE SEGURANÇA PÚBLICA",
-    "Controladoria Geral do Município" => "CONTROLADORIA GERAL",
-    "Procuradoria Geral do Município" => "PROCURADORIA GERAL",
-    "Secretaria Municipal de Cultura" => "SECRETARIA DE CULTURA",
-    "Secretaria Municipal de Planejamento, Ciência, Tecnologia e Inovação" => "SECRETARIA DE PLANEJAMENTO E TECNOLOGIA",
-    "Secretaria Municipal de Obras e Serviços Públicos" => "SECRETARIA DE OBRAS E SERVIÇOS PÚBLICOS",
+    "Gabinete do Prefeito" => "gabinete do prefeito",
+    "Gabinete do Vice-Prefeito" => "gabinete do vice-prefeito",
+    "Secretaria Municipal da Mulher de Família" => "secretaria da mulher",
+    "Secretaria Municipal de Fazenda" => "secretaria de fazenda",
+    "Secretaria Municipal de Educação" => "secretaria de educação",
+    "Secretaria Municipal de Agricultura e Meio Ambiente" => "secretaria de agricultura e meio ambiente",
+    "Secretaria Municipal de Agricultura Familiar e Segurança Alimentar" => "secretaria de agricultura familiar",
+    "Secretaria Municipal de Assistência Social" => "secretaria de assistência social",
+    "Secretaria Municipal de Desenvolvimento Econômico e Turismo" => "secretaria de desenvolv. econômico",
+    "Secretaria Municipal de Administração" => "secretaria de administração",
+    "Secretaria Municipal de Governo" => "secretaria de governo",
+    "Secretaria Municipal de Infraestrutura, Transportes e Saneamento" => "secretaria municipal de infraestrutura, transportes e saneamento", // Corrigido para corresponder exatamente ao formato no banco
+    "Secretaria Municipal de Esporte e Lazer e Juventude" => "secretaria municipal de esporte e lazer e juventude",
+    "Secretaria Municipal da Cidade" => "secretaria da cidade",
+    "Secretaria Municipal de Saúde" => "secretaria de saúde",
+    "Secretaria Municipal de Segurança Pública, Trânsito e Defesa Civil" => "secretaria de segurança pública",
+    "Controladoria Geral do Município" => "controladoria geral",
+    "Procuradoria Geral do Município" => "procuradoria geral",
+    "Secretaria Municipal de Cultura" => "secretaria de cultura",
+    "Secretaria Municipal de Planejamento, Ciência, Tecnologia e Inovação" => "secretaria de planejamento e tecnologia",
+    "Secretaria Municipal de Obras e Serviços Públicos" => "secretaria de obras e serviços públicos",
 ];
 
 $abastecimento_id = $_GET['id'] ?? 0;
@@ -51,6 +52,15 @@ try {
     if (!$abastecimento) {
         die("Abastecimento não encontrado ou não está pronto para assinatura.");
     }
+
+    // Buscar o valor do prefixo na tabela 'veiculos'
+    $stmt_veiculo = $conn->prepare("SELECT veiculo as prefixo FROM veiculos WHERE id = :veiculo_id");
+    $stmt_veiculo->bindParam(':veiculo_id', $abastecimento['veiculo_id']);
+    $stmt_veiculo->execute();
+    $veiculo_data = $stmt_veiculo->fetch(PDO::FETCH_ASSOC);
+
+    // Definir $prefixo com o resultado da consulta, ou um valor padrão para evitar erros
+    $prefixo = $veiculo_data['prefixo'] ?? 'Não definido';
 
     // Processar assinatura
     if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -84,7 +94,7 @@ try {
         $stmt->bindParam(':nome', $abastecimento['motorista_name']);
         $stmt->bindParam(':data', $data_atual);
         $stmt->bindParam(':hora', $hora_atual);
-        $stmt->bindParam(':prefixo', $abastecimento['veiculo_id']);
+        $stmt->bindParam(':prefixo', $prefixo);
         $stmt->bindParam(':placa', $abastecimento['placa']);
         $stmt->bindParam(':veiculo', $abastecimento['veiculo_nome']);
         $stmt->bindParam(':secretaria', $abastecimento['secretaria']);
@@ -106,91 +116,193 @@ try {
             $combustivel = $abastecimento['combustivel'];
             $posto_name = $abastecimento['posto_name'];
 
-            // Mapear a secretaria conforme o mapa fornecido
-            $secretaria_normalizada = strtoupper(trim($secretaria));
-            foreach ($secretarias_map as $key => $value) {
-                if (strtoupper(trim($value)) === $secretaria_normalizada) {
-                    $secretaria_bd = $value;
-                    break;
-                }
-            }
-
-            if (!isset($secretaria_bd)) {
-                $secretaria_bd = $secretaria_normalizada;
-            }
-
             // Converter para o formato do banco de dados
             $coluna_combustivel = '';
-            switch($combustivel) {
-                case 'Etanol': $coluna_combustivel = 'valor_etanol'; break;
-                case 'Gasolina': $coluna_combustivel = 'valor_gasolina'; break;
-                case 'Diesel': $coluna_combustivel = 'valor_diesel'; break;
-                case 'Diesel S10': $coluna_combustivel = 'valor_diesel_s10'; break;
+            $combustivel = trim($combustivel); // Remove espaços extras
+            switch(strtolower($combustivel)) { // Converte para minúsculas
+                case 'etanol': $coluna_combustivel = 'valor_etanol'; break;
+                case 'gasolina': $coluna_combustivel = 'valor_gasolina'; break;
+                case 'diesel': $coluna_combustivel = 'valor_diesel'; break;
+                case 'diesel s10': case 'diesel-s10': case 'diesels10': $coluna_combustivel = 'valor_diesel_s10'; break;
             }
 
             if (!empty($coluna_combustivel)) {
                 try {
                     $conn->beginTransaction();
 
-                    // 1. Descontar da secretária específica (mantém colunas de combustível)
-                    $stmt = $conn->prepare("UPDATE empenhos_secretarias
-                                          SET $coluna_combustivel = $coluna_combustivel - :valor,
-                                              valor_total = valor_total - :valor
-                                          WHERE secretaria = :secretaria
-                                          AND fornecedor = :fornecedor
-                                          AND status = 'ativo'
-                                          AND ($coluna_combustivel - :valor) >= 0");
-                    $stmt->bindParam(':valor', $valor);
-                    $stmt->bindParam(':secretaria', $secretaria_bd);
-                    $stmt->bindParam(':fornecedor', $posto_name);
-                    $stmt->execute();
+                    // Converter o nome da secretaria do veículo para o formato usado no empenhos_secretarias
+                    $secretaria_original = $abastecimento['secretaria'];
+                    $secretaria_bd = null;
 
-                    // Verificar se alguma linha foi afetada
-                    if ($stmt->rowCount() == 0) {
-                        throw new Exception("Saldo insuficiente para o combustível na secretaria ou secretaria/fornecedor não encontrado");
+                    // 1. Primeiro tenta uma correspondência direta no mapa
+                    if (array_key_exists($secretaria_original, $secretarias_map)) {
+                        $secretaria_bd = $secretarias_map[$secretaria_original];
+                    } else {
+                        // 2. Se não encontrou, tenta uma correspondência sem case-sensitive
+                        foreach ($secretarias_map as $key => $value) {
+                            if (strcasecmp($key, $secretaria_original) === 0) {
+                                $secretaria_bd = $value;
+                                break;
+                            }
+                        }
+
+                        // 3. Se ainda não encontrou, faz uma busca no banco para encontrar a secretaria correta
+                        if (!$secretaria_bd) {
+                            $stmt_secretarias = $conn->prepare("
+                                SELECT DISTINCT secretaria
+                                FROM empenhos_secretarias
+                                WHERE secretaria LIKE :secretaria_like
+                                AND fornecedor = :fornecedor
+                                AND status = 'ativo'
+                                LIMIT 1
+                            ");
+                            $search_term = "%" . str_replace(" Municipal ", "%", $secretaria_original) . "%";
+                            $stmt_secretarias->bindParam(':secretaria_like', $search_term);
+                            $stmt_secretarias->bindParam(':fornecedor', $posto_name);
+                            $stmt_secretarias->execute();
+                            $resultado_secretaria = $stmt_secretarias->fetch(PDO::FETCH_ASSOC);
+
+                            if ($resultado_secretaria) {
+                                $secretaria_bd = $resultado_secretaria['secretaria'];
+                            } else {
+                                // 4. Se ainda não encontrou, usa o original
+                                $secretaria_bd = $secretaria_original;
+                            }
+                        }
                     }
 
-                    // 2. Obter o id_empenho_total relacionado a esta secretária
-                    $stmt = $conn->prepare("SELECT id_empenho_total FROM empenhos_secretarias
-                                          WHERE secretaria = :secretaria
-                                          AND fornecedor = :fornecedor
-                                          AND status = 'ativo'
-                                          LIMIT 1");
-                    $stmt->bindParam(':secretaria', $secretaria_bd);
-                    $stmt->bindParam(':fornecedor', $posto_name);
-                    $stmt->execute();
-                    $id_empenho_total = $stmt->fetchColumn();
+                    // Adicionar log para debug
+                    error_log("Mapeamento de secretaria: Original=$secretaria_original, Mapeada=$secretaria_bd");
 
-                    if (!$id_empenho_total) {
-                        throw new Exception("Empenho total não encontrado para esta secretaria e fornecedor");
+                    // Busca por diferentes variações da secretaria e do posto
+                    $stmt = $conn->prepare("
+                        SELECT id, id_empenho_total, valor_total, $coluna_combustivel
+                        FROM empenhos_secretarias
+                        WHERE (
+                            secretaria = :secretaria_exata OR
+                            UPPER(secretaria) = UPPER(:secretaria_exata)
+                        )
+                        AND (
+                            fornecedor = :fornecedor OR
+                            UPPER(fornecedor) = UPPER(:fornecedor)
+                        )
+                        AND status = 'ativo'
+                        AND $coluna_combustivel >= :valor
+                        LIMIT 1
+                    ");
+                    $stmt->bindParam(':secretaria_exata', $secretaria_bd);
+                    $stmt->bindParam(':fornecedor', $posto_name);
+                    $stmt->bindParam(':valor', $valor);
+                    $stmt->execute();
+
+                    $empenho_sec = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                    // Se não encontrou, tenta uma busca mais ampla
+                    if (!$empenho_sec) {
+                        // Exibir todos os empenhos ativos para debug
+                        $stmt_debug = $conn->prepare("
+                            SELECT id, secretaria, fornecedor, $coluna_combustivel, valor_total
+                            FROM empenhos_secretarias
+                            WHERE status = 'ativo'
+                            ORDER BY secretaria, fornecedor
+                        ");
+                        $stmt_debug->execute();
+                        $todos_empenhos = $stmt_debug->fetchAll(PDO::FETCH_ASSOC);
+
+                        $empenhos_disponiveis = [];
+                        foreach ($todos_empenhos as $emp) {
+                            $empenhos_disponiveis[] = "ID: {$emp['id']}, Secretaria: {$emp['secretaria']}, Fornecedor: {$emp['fornecedor']}, Saldo: {$emp[$coluna_combustivel]}";
+                        }
+
+                        $empenhos_disponiveis_str = implode("\n", $empenhos_disponiveis);
+                        error_log("Empenhos disponíveis no sistema:\n$empenhos_disponiveis_str");
+
+                        throw new Exception("Não foi encontrado empenho ativo com saldo suficiente para a secretaria '$secretaria_bd' no posto '$posto_name'. Por favor, verifique se há empenho cadastrado para esta combinação de secretaria e posto.");
                     }
 
-                    // 3. Descontar APENAS do valor_total no empenho total geral
-                    $stmt = $conn->prepare("UPDATE empenhos_totais
-                                          SET valor_total = valor_total - :valor
-                                          WHERE id = :id_empenho_total
-                                          AND (valor_total - :valor) >= 0");
-                    $stmt->bindParam(':valor', $valor);
-                    $stmt->bindParam(':id_empenho_total', $id_empenho_total);
-                    $stmt->execute();
+                    // O resto do código permanece o mesmo...
+                    // Continuar com as atualizações e verificações como antes
 
-                    // Verificar se alguma linha foi afetada
-                    if ($stmt->rowCount() == 0) {
-                        throw new Exception("Saldo insuficiente no empenho total");
+                    // 2. Atualizar valores em empenhos_secretarias
+                    $update_sec = $conn->prepare("
+                        UPDATE empenhos_secretarias
+                        SET $coluna_combustivel = $coluna_combustivel - :valor,
+                            valor_total = valor_total - :valor
+                        WHERE id = :id
+                    ");
+                    $update_sec->bindParam(':valor', $valor);
+                    $update_sec->bindParam(':id', $empenho_sec['id']);
+
+                    if (!$update_sec->execute() || $update_sec->rowCount() == 0) {
+                        throw new Exception("Falha ao descontar valores no empenho da secretaria");
+                    }
+
+                    // 3. Buscar e atualizar empenhos_totais
+                    $id_empenho_total = $empenho_sec['id_empenho_total'];
+
+                    // Verificar se id_empenho_total é numérico ou string
+                    if (is_numeric($id_empenho_total)) {
+                        // Buscar por ID numérico
+                        $stmt_total = $conn->prepare("
+                            SELECT id, valor_total
+                            FROM empenhos_totais
+                            WHERE id = :id_empenho
+                            AND status = 'ativo'
+                        ");
+                        $stmt_total->bindParam(':id_empenho', $id_empenho_total);
+                    } else {
+                        // Buscar pelo valor do campo id_empenho_total
+                        $stmt_total = $conn->prepare("
+                            SELECT id, valor_total
+                            FROM empenhos_totais
+                            WHERE numero_empenho = :numero_empenho
+                            AND status = 'ativo'
+                        ");
+                        $stmt_total->bindParam(':numero_empenho', $id_empenho_total);
+                    }
+
+                    $stmt_total->execute();
+                    $empenho_total = $stmt_total->fetch(PDO::FETCH_ASSOC);
+
+                    if (!$empenho_total) {
+                        throw new Exception("Empenho total correspondente não encontrado (ID/Número: $id_empenho_total)");
+                    }
+
+                    // 4. Atualizar empenhos_totais
+                    $update_total = $conn->prepare("
+                        UPDATE empenhos_totais
+                        SET valor_total = valor_total - :valor
+                        WHERE id = :id
+                    ");
+                    $update_total->bindParam(':valor', $valor);
+                    $update_total->bindParam(':id', $empenho_total['id']);
+
+                    if (!$update_total->execute() || $update_total->rowCount() == 0) {
+                        throw new Exception("Falha ao descontar valor do empenho total");
                     }
 
                     $conn->commit();
-                    $success_message = "Abastecimento registrado com sucesso!";
+                    $success_message = "Abastecimento registrado com sucesso e valores descontados dos empenhos!";
+
+                    // Se chegou aqui, o processo foi concluído com sucesso
+                    header("Location: autorizar_abastecimento.php?success=1");
+                    exit();
+
                 } catch (Exception $e) {
                     $conn->rollBack();
-                    $error_message = "Erro ao registrar abastecimento: " . $e->getMessage();
+                    $error_message = "Erro ao processar desconto dos empenhos: " . $e->getMessage();
+                    error_log("Erro no desconto de empenhos: " . $e->getMessage());
                 }
             } else {
-                $error_message = "Tipo de combustível inválido";
+                $error_message = "Tipo de combustível inválido ou não identificado: $combustivel";
+                error_log("Combustível inválido: $combustivel");
             }
 
-            header("Location: autorizar_abastecimento.php?success=1");
-            exit();
+            // Se chegou aqui, houve um erro, então não redirecionamos
+            if (isset($error_message)) {
+                // Preparar para exibir o erro na página
+                $show_error = true;
+            }
         } else {
             $error = "Erro ao assinar abastecimento.";
         }
@@ -199,14 +311,6 @@ try {
 } catch (PDOException $e) {
     die("Erro: " . $e->getMessage());
 }
-// Buscar o valor do prefixo na tabela 'veiculos'
-$stmt_veiculo = $conn->prepare("SELECT veiculo as prefixo FROM veiculos WHERE id = :veiculo_id");
-$stmt_veiculo->bindParam(':veiculo_id', $abastecimento['veiculo_id']);
-$stmt_veiculo->execute();
-$veiculo_data = $stmt_veiculo->fetch(PDO::FETCH_ASSOC);
-
-// Definir $prefixo com o resultado da consulta, ou um valor padrão para evitar erros
-$prefixo = $veiculo_data['prefixo'] ?? 'Não definido';
 ?>
 
 <!DOCTYPE html>
@@ -354,6 +458,26 @@ $prefixo = $veiculo_data['prefixo'] ?? 'Não definido';
         .abastecimento-info strong {
             color: #4b5563;
         }
+
+        /* Adicione este estilo para a mensagem de erro personalizada */
+        .error-message {
+            background-color: #FEF2F2;
+            border-left: 5px solid #EF4444;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            border-radius: 8px;
+        }
+
+        .error-message h4 {
+            color: #B91C1C;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .error-message p {
+            color: #7F1D1D;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -364,18 +488,19 @@ $prefixo = $veiculo_data['prefixo'] ?? 'Não definido';
                 <i class="fas fa-signature text-white text-4xl"></i>
             </div>
             <h1 class="text-white text-2xl font-bold">Assinar Abastecimento</h1>
-
-            <!-- Botão de Voltar -->
-            <a href="autorizar_abastecimento.php" class="absolute left-5 top-5 nav-button bg-white text-success">
-                <i class="fas fa-arrow-left"></i>
+            <a href="autorizar_abastecimento.php" class="nav-button bg-white absolute top-6 left-6 cursor-pointer flex items-center justify-center w-10 h-10 rounded-full shadow-soft hover:shadow-hard transition-shadow">
+                <i class="fas fa-chevron-left text-primary text-lg"></i>
             </a>
         </div>
 
         <!-- Forms Container -->
         <div class="forms-container px-5 pb-6 -mt-10 relative">
             <div class="bg-white rounded-2xl p-6 shadow-hard">
-                <?php if (isset($error)): ?>
-                    <div class="mb-4 p-3 bg-red-100 text-red-800 rounded-lg"><?= $error ?></div>
+                <?php if (isset($show_error) && isset($error_message)): ?>
+                    <div class="error-message">
+                        <h4><i class="fas fa-exclamation-triangle mr-2"></i>Não foi possível completar a operação</h4>
+                        <p><?= htmlspecialchars($error_message) ?></p>
+                    </div>
                 <?php endif; ?>
 
                 <div class="abastecimento-info">
@@ -386,6 +511,10 @@ $prefixo = $veiculo_data['prefixo'] ?? 'Não definido';
                     <p><strong>Litros:</strong> <?= $abastecimento['litros'] ?></p>
                     <p><strong>Combustível:</strong> <?= $abastecimento['combustivel'] ?></p>
                     <p><strong>Valor:</strong> R$ <?= number_format($abastecimento['valor'], 2, ',', '.') ?></p>
+                    <!-- Adicionar informação da secretaria para debug -->
+                    <?php if (isset($secretaria_bd)): ?>
+                    <p><strong>Secretaria:</strong> <?= htmlspecialchars($secretaria_bd) ?></p>
+                    <?php endif; ?>
                 </div>
 
                 <form method="POST" enctype="multipart/form-data" class="space-y-4">
